@@ -1,12 +1,7 @@
 import os
-import shutil
 import sys
+import shutil
 from utils import generate_page
-
-def copy_static(src, dst):
-    if os.path.exists(dst):
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst)
 
 def generate_pages_recursive(dir_path_content, template_path, dest_dir_path, basepath="/"):
     for entry in os.listdir(dir_path_content):
@@ -28,26 +23,33 @@ def generate_pages_recursive(dir_path_content, template_path, dest_dir_path, bas
             print(f"Generating page from {content_entry_path} to {output_path} using {template_path}")
             generate_page(content_entry_path, template_path, output_path, basepath)
 
-def main():
-    # Use basepath from CLI, default to "/"
-    basepath = sys.argv[1] if len(sys.argv) > 1 else "/"
+def copy_static_files(static_dir, dest_dir):
+    if os.path.exists(dest_dir):
+        print(f"Removing existing contents of {dest_dir}")
+        shutil.rmtree(dest_dir)
+    print(f"Copying static files from {static_dir} to {dest_dir}")
+    shutil.copytree(static_dir, dest_dir)
 
-    docs_dir = "docs"
-    static_dir = "static"
+def main():
+    # Get basepath from CLI argument or default to "/"
+    basepath = sys.argv[1] if len(sys.argv) > 1 else "/"
+    if not basepath.endswith("/"):
+        basepath += "/"
+
     content_dir = "content"
     template_path = "template.html"
+    docs_dir = "docs"
 
-    # Clear docs directory
+    # Remove old docs directory and recreate
     if os.path.exists(docs_dir):
         print(f"Removing existing contents of {docs_dir}")
         shutil.rmtree(docs_dir)
-    os.makedirs(docs_dir)
+    os.makedirs(docs_dir, exist_ok=True)
 
-    # Copy static files
-    print(f"Copying static files from {static_dir} to {docs_dir}")
-    copy_static(static_dir, docs_dir)
+    # Copy static files into docs (for GitHub Pages)
+    copy_static_files("static", docs_dir)
 
-    # Generate pages recursively
+    # Generate all pages recursively, passing basepath
     generate_pages_recursive(content_dir, template_path, docs_dir, basepath)
 
 if __name__ == "__main__":
