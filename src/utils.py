@@ -8,16 +8,14 @@ def generate_page(content_path, template_path, output_path, basepath="/"):
 
     html_content = markdown.markdown(markdown_content)
 
-    # Prefix all src/href with basepath
-    def prefix_path(match):
-        prefix = match.group(1)
-        path = match.group(2)
-        # Only prefix relative paths (not http, https, mailto, or anchors)
-        if path.startswith(("http", "https", "mailto:", "#", basepath)):
-            return match.group(0)
-        return f'{prefix}="{basepath.rstrip("/")}/{path.lstrip("/")}"'
+    # Inject basepath into href/src if not absolute
+    def add_basepath(match):
+        attr, url = match.groups()
+        if url.startswith(("http://", "https://", "mailto:", "#", basepath)):
+            return f'{attr}="{url}"'
+        return f'{attr}="{basepath.rstrip("/")}/{url.lstrip("/")}"'
 
-    html_content = re.sub(r'(src|href)="([^"]+)"', prefix_path, html_content)
+    html_content = re.sub(r'(href|src)="([^"]+)"', add_basepath, html_content)
 
     with open(template_path, "r") as f:
         template = f.read()
