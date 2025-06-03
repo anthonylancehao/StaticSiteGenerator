@@ -1,5 +1,5 @@
 from htmlnode import LeafNode, ParentNode
-from textnode import TextType, TextNode
+from textnode import TextNode, TextType
 from markdown_splitters import (
     split_nodes_image,
     split_nodes_link,
@@ -7,11 +7,10 @@ from markdown_splitters import (
     split_nodes_italic,
     split_nodes_code,
 )
-from enum import Enum, auto
 import re
+from enum import Enum, auto
 
-# ----- TextNode Conversion -----
-def text_node_to_html_node(text_node, basepath="/"):
+def text_node_to_html_node(text_node, basepath=""):
     if text_node.text_type == TextType.TEXT:
         return LeafNode(None, text_node.text)
     elif text_node.text_type == TextType.BOLD:
@@ -21,15 +20,18 @@ def text_node_to_html_node(text_node, basepath="/"):
     elif text_node.text_type == TextType.CODE:
         return LeafNode("code", text_node.text)
     elif text_node.text_type == TextType.LINK:
-        full_url = basepath.rstrip("/") + "/" + text_node.url.lstrip("/")
-        return LeafNode("a", text_node.text, {"href": full_url})
+        href = text_node.url
+        if href.startswith("/"):
+            href = basepath.rstrip("/") + href
+        return LeafNode("a", text_node.text, {"href": href})
     elif text_node.text_type == TextType.IMAGE:
-        full_url = basepath.rstrip("/") + "/" + text_node.url.lstrip("/")
-        return LeafNode("img", "", {"src": full_url, "alt": text_node.text})
+        src = text_node.url
+        if src.startswith("/"):
+            src = basepath.rstrip("/") + src
+        return LeafNode("img", "", {"src": src, "alt": text_node.text})
     else:
         raise ValueError("Invalid text type")
 
-# ----- Markdown to TextNodes -----
 def text_to_textnodes(text):
     nodes = [TextNode(text, TextType.TEXT)]
     for splitter in [
@@ -42,15 +44,40 @@ def text_to_textnodes(text):
         nodes = splitter(nodes)
     return nodes
 
-# ----- TextNodes to HTML Children -----
-def text_to_children(text, basepath="/"):
+def text_to_children(text, basepath=""):
     text_nodes = text_to_textnodes(text)
     return [text_node_to_html_node(node, basepath) for node in text_nodes]
 
-# ----- Block Splitting and Typing -----
+def paragraph_to_html(block, basepath=""):
+    return ParentNode("p", text_to_children(block, basepath))
+
+def heading_to_html(block, basepath=""):
+    level = len(block.split(" ")[0])
+    text = block[level + 1:]
+    return ParentNode(f"h{level}", text_to_children(text, basepath))
+
+def code_to_html(block):
+    content = "\n".join(block.split("\n")[1:-1]) + "\n"
+    return ParentNode("pre", [LeafNode("code", content)])
+
+def quote_to_html(block, basepath=""):
+    cleaned = "\n".join([line[1:].lstrip() for line in block.split("\n")])
+    return ParentNode("blockquote", text_to_children(cleaned, basepath))
+
+def unordered_list_to_html(block, basepath=""):
+    items = block.split("\n")
+    children = [ParentNode("li", text_to_children(item[2:], basepath)) for item in items]
+    return ParentNode("ul", children)
+
+def ordered_list_to_html(block, basepath=""):
+    items = block.split("\n")
+    children = [ParentNode("li", text_to_children(item[item.find('.') + 2:], basepath)) for item in items]
+    return ParentNode("ol", children)
+
 def markdown_to_blocks(markdown):
     raw_blocks = markdown.split('\n\n')
-    return [block.strip() for block in raw_blocks if block.strip()]
+    blocks = [block.strip() for block in raw_blocks if block.strip() != '']
+    return blocks
 
 class BlockType(Enum):
     PARAGRAPH = auto()
@@ -80,44 +107,15 @@ def block_to_block_type(block):
         return BlockType.ORDERED_LIST
     return BlockType.PARAGRAPH
 
-# ----- Block to HTML Node Conversion -----
-def paragraph_to_html(block, basepath="/"):
-    return ParentNode("p", text_to_children(block, basepath))
-
-def heading_to_html(block, basepath="/"):
-    level = len(block.split(" ")[0])
-    text = block[level + 1:]
-    return ParentNode(f"h{level}", text_to_children(text, basepath))
-
-def code_to_html(block, basepath="/"):
-    content = "\n".join(block.split("\n")[1:-1]) + "\n"
-    return ParentNode("pre", [LeafNode("code", content)])
-
-def quote_to_html(block, basepath="/"):
-    cleaned = "\n".join([line[1:].lstrip() for line in block.split("\n")])
-    return ParentNode("blockquote", text_to_children(cleaned, basepath))
-
-def unordered_list_to_html(block, basepath="/"):
-    items = block.split("\n")
-    children = [ParentNode("li", text_to_children(item[2:], basepath)) for item in items]
-    return ParentNode("ul", children)
-
-def ordered_list_to_html(block, basepath="/"):
-    items = block.split("\n")
-    children = [ParentNode("li", text_to_children(item[item.find('.') + 2:], basepath)) for item in items]
-    return ParentNode("ol", children)
-
-# ----- Markdown to Full HTML Tree -----
-def markdown_to_html_node(markdown, basepath="/"):
+def markdown_to_html_node(markdown, basepath=""):
     blocks = markdown_to_blocks(markdown)
     children = []
-
     for block in blocks:
         block_type = block_to_block_type(block)
         if block_type == BlockType.HEADING:
             children.append(heading_to_html(block, basepath))
         elif block_type == BlockType.CODE:
-            children.append(code_to_html(block, basepath))
+            children.append(code_to_html(block))
         elif block_type == BlockType.QUOTE:
             children.append(quote_to_html(block, basepath))
         elif block_type == BlockType.UNORDERED_LIST:
@@ -126,5 +124,4 @@ def markdown_to_html_node(markdown, basepath="/"):
             children.append(ordered_list_to_html(block, basepath))
         elif block_type == BlockType.PARAGRAPH:
             children.append(paragraph_to_html(block, basepath))
-
     return ParentNode("div", children)
