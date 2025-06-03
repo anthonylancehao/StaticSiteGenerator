@@ -1,18 +1,24 @@
+import os
 from conversions import markdown_to_html_node
-from htmlnode import HTMLNode
 
-def generate_page(input_path, template_path, output_path, basepath=""):
-    print(f"Generating page from {input_path} -> {output_path} using {template_path}")
-    with open(input_path, "r") as f:
+def generate_page(from_path, template_path, to_path, basepath="/"):
+    print(f"Generating page from {from_path} -> {to_path} with basepath '{basepath}'")
+
+    # Read markdown content
+    with open(from_path, "r") as f:
         markdown = f.read()
 
+    # Convert markdown to HTML
+    html_node = markdown_to_html_node(markdown)
+    content_html = html_node.to_html(basepath=basepath)
+
+    # Read the HTML template
     with open(template_path, "r") as f:
         template = f.read()
 
-    html_node = markdown_to_html_node(markdown, basepath)
-    html = html_node.to_html()
+    # Replace the {{ Content }} placeholder
+    final_html = template.replace("{{ Content }}", content_html)
 
-    output = template.replace("{{ content }}", html)
-
-    with open(output_path, "w") as f:
-        f.write(output)
+    # Write final HTML to output file
+    with open(to_path, "w") as f:
+        f.write(final_html)
